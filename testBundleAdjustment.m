@@ -3,7 +3,7 @@ function error = testBundleAdjustment(x)
 % BUNDLEADJUSTMENT and computes the mean error of the recontruction of the 
 % projection points with the outputs from that function
 
-[M, X, t] = bundleAdjustment(x);
+[X, M, t] = bundleAdjustment(x);
 [m, n, ~] = size(x);
 
 xout = zeros(m, n, 2);
@@ -17,6 +17,6 @@ for i=1:m
    end 
 end
 
-error = mean((xout(:) - x(:))./x(:));
+error = mean(abs((xout(:) - x(:))./x(:)));
 
 end

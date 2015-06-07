@@ -1,4 +1,4 @@
-function [M, X, t] = bundleAdjustment(x)
+function [X, M, t] = bundleAdjustment(x)
 %BUNDLEADJUSTMENT Recovers camera matrices, 3D matched structure and 
 % translation vectors
 %   The function receives a matrix with the matched points and returns a
@@ -9,11 +9,11 @@ function [M, X, t] = bundleAdjustment(x)
 %       represents the coordinates of the j-th matched point from the i-th 
 %       projection.
 %   Output:
-%       - 'M': matrix 2*m-by-3 of projections matrices in which each 
+%       - 'M': matrix 2*m-by-3 of projections matrices, in which each 
 %       projection matrix is 2-by-3.
-%       - 'X': matrix 3-by-n of 3D structure in which each X(:, j) 
+%       - 'X': matrix 3-by-n of 3D structure, in which each X(:, j) 
 %       representts the j-th matched point in the 3D space.
-%       - 't': m-by-2 matrix of translation vectors in which each t(i, :) 
+%       - 't': m-by-2 matrix of translation vectors, in which each t(i, :) 
 %       represents the image coordinates of the centroid of the projected 
 %       points  
 
