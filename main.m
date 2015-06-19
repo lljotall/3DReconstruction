@@ -23,7 +23,7 @@ images = dir([path, '*', fileExtension]);
 nimages = size(images, 1);
 
 structure3D = [];
-for i=1:nimages-1
+for i=1%:nimages-1
     % Reads images
     im1 = imread([path, images(i).name]);
     im2 = imread([path, images(i + 1).name]);
@@ -42,9 +42,26 @@ for i=1:nimages-1
         x = zeros(2, matchedPoints1.Count, 2);
         x(1, :, :) = matchedPoints1.Location;
         x(2, :, :) = matchedPoints2.Location;
-        [X, ~, ~] = bundleAdjustment(x);
+        [X, M, t] = bundleAdjustment(x);
         structure3D = [structure3D, X];
     end
+    
+    % Visualize the corresponding points.
+    coord = matchedPoints1.Location
+    subplot(1, 2, 1); 
+    imshow(im1);
+    hold on;
+    scatter(coord(:, 1), coord(:, 2), 5);
+    hold off;
+    coord = matchedPoints2.Location;
+    subplot(1, 2, 2);
+    imshow(im2);
+    hold on;
+    scatter(coord(:, 1), coord(:, 2), 5);
+    hold off;
+    
+    figure;
+    scatter3(X(1,:), X(2,:), X(3,:));
 end
 
 end
