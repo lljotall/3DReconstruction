@@ -1,83 +1,121 @@
-function [ local, seed ] = matchPropagation( I1, I2, matchedPoints1, matchedPoints2 )
+function [map1, map2] = matchPropagation( I1, I2, p1, p2 )
 %UNTITLED2 Summary of this function goes here
 %   Detailed explanation goes here
 %   Lhillier & Quan, 2002
-    
-    n = 5;      % Neighborhood size
-    matchN = 2; % Local neighborhood size
-    z = 0.8;    % Xcorrelation threshold
-    t = 2;      % Confidence threshold
-    map = HashTable(length(I1)^2);
-    
-    % Assembles Heap with Seed input points
-    seed = MaxHeapKV(length(I1)^2);
-    for i = 1:length(matchedPoints1)
-        % I1 window
-        p = floor(matchedPoints1(i).Location);
-        
-        % I2 window
-        q = floor(matchedPoints2(i).Location);
-        
-        % Calculates crosscorrelation between the two windows
-        [zncc, dx, dy] = xcorrelation(n, I1, p, I2, q);
 
-        % Insert maximum crosscorrelation in heap
-        seed.InsertKey({zncc p q+[dx dy]});
+N= 2;
+NN = 2*N + 1;          % Neighborhood size
+n = 1;          % Local neighborhood size
+nn = 2*n + 1;
+z = 0.6;        % Xcorrelation threshold
+t = 0.005;          % Confidence threshold
+znccWindow = 5; %
+NINF = -1024;
+
+% compute ZNCC and filter points
+[zncc, p1, p2] = computeMatchesZNCC(I1, p1, I2, p2, znccWindow);
+p1 = p1(zncc > z, :);
+p2 = p2(zncc > z, :);
+zncc = zncc(zncc > z);
+
+[maxRow, maxCol] = size(I1);
+maxpoints = length(I1)^2;
+seed = NINF*ones(maxpoints, 5);
+map1 = NINF*ones(maxpoints, 2);
+map2 = NINF*ones(maxpoints, 2);
+local = zeros(maxpoints, 5);
+
+% Assembles Heap with Seed input points
+seed(1:length(zncc), :) = sort([zncc' p1 p2], 1, 'descend');
+nSeedsMatches = length(zncc);
+
+% computes neighborhood indexes
+globalNeighbors = zeros(NN*NN, 2);
+[globalNeighbors(:, 1), globalNeighbors(:,2)] = ind2sub([NN, NN], 1:NN*NN);
+globalNeighbors = globalNeighbors - ceil(NN/2);
+
+localNeighbors = zeros(nn*nn, 2);
+[localNeighbors(:, 1), localNeighbors(:,2)] = ind2sub([nn, nn], 1:nn*nn);
+localNeighbors = localNeighbors - ceil(nn/2);
+
+% computers confidences
+confidence1 = confidence(I1);
+confidence2 = confidence(I2);
+
+onesLocal = ones(length(localNeighbors), 2);
+bestSeedInd = 1;
+endMapInd = 1;    
+while nSeedsMatches > 0
+    % best zncc
+    bestSeedZNCC = seed(bestSeedInd, :);
+    seed(bestSeedInd, 1) = NINF;
+    bestSeedInd = bestSeedInd + 1;
+    nSeedsMatches = nSeedsMatches - 1
+    
+    % local <- 0
+    local(:, 1) = NINF;
+    nLocalMatches = 0;
+    
+    % globalNeighbors
+    u1 = bsxfun(@plus, globalNeighbors, bestSeedZNCC(2:3));
+    u1(u1 < 1) = 1;
+    u1(u1(:, 1) > maxRow, 1) = maxRow;
+    u1(u1(:, 2) > maxCol, 2) = maxCol;
+    
+    for i=1:length(u1)
+        u2 = bsxfun(@plus, localNeighbors, u1(i, :));
+        u2(u2(:, 1) < u1(1, 1), 1) = u1(1, 1);
+        u2(u2(:, 2) < u1(1, 2), 2) = u1(1, 2);
+        u2(u2(:, 1) > u1(end, 1), 1) = u1(end, 1);
+        u2(u2(:, 2) > u1(end, 2), 2) = u1(end, 2);
+        
+        uu1 = bsxfun(@times, u1(i, :), onesLocal);
+        [znccLocal, fpu1, fpu2] = computeMatchesZNCC(I1, uu1, I2, u2, znccWindow);
+        fpu1 = fpu1(znccLocal > z, :);
+        fpu2 = fpu2(znccLocal > z, :);
+        
+        uConf1 = confidence1(uint32(fpu1(:, 1)) + uint32((fpu1(:, 2) - 1))*maxRow);
+        uConf2 = confidence2(uint32(fpu2(:, 1)) + uint32((fpu2(:, 2) - 1))*maxRow);
+        
+        firstCondition = uConf1 > t;
+        secondCondition =  uConf2 > t;
+        andConditions = logical(firstCondition .* secondCondition); 
+        
+        npropagated = sum (andConditions);
+        if npropagated > 0
+            local((nLocalMatches + 1):(nLocalMatches + npropagated), :) = ...
+                [zncc(andConditions)', fpu1(andConditions, :), fpu2(andConditions, :)];
+            nLocalMatches = nLocalMatches + npropagated;
+        end
     end
-
-    while ~seed.IsEmpty()
-        x = seed.ExtractMax();
-        local = MaxHeapKV(length(I1)*length(I1));
-        % Store in 'local' new candidate matches enforcing the disparity
-        % gradient limit
-        for i = x{2}(1)-n:x{2}(1)+n
-            for j = x{2}(2)-n:x{2}(2)+n
-                for u = x{3}(1)-n:x{3}(1)+n
-                    for v = x{3}(2)-n:x{3}(2)+n
-                        
-                        if confidence(I1, i, j) > t && confidence(I2, u, v) > t
-                            [zncc, dx, dy] = xcorrelation(matchN, I1, [i j], I2, [u v]);
-                            if zncc > z
-                                key = {zncc [i j] [u v]+[dx dy]};
-                                local.InsertKey(key);
-                            end
-                        end
-                        
-                    end
-                end
-            end
+    
+    if nLocalMatches > 0
+        local = sort(local, 1, 'descend');
+        bestLocalInd = 1;
+        
+        while bestLocalInd <= nLocalMatches
+            bestLocalZNCC = local(bestLocalInd, :);
+            bestLocalInd = bestLocalInd + 1;
+    
+            if (ismember(bestLocalZNCC(2:3), map1, 'rows') ~= 1 && ...
+                    ismember(bestLocalZNCC(4:5), map2,'rows') ~= 1)
+                
+                % stores ind map
+                map1(endMapInd, :) = bestLocalZNCC(2:3);
+                map2(endMapInd, :) = bestLocalZNCC(4:5);
+                endMapInd = endMapInd + 1;
+                
+                % stores in seed
+                emptySeedSpot = find(seed(:, 1) == NINF, 1);
+                seed(emptySeedSpot, :) = bestLocalZNCC;
+                nSeedsMatches = nSeedsMatches + 1;
+            end 
         end
         
-        % Store in 'seed' and 'map' final matches
-        while ~local.IsEmpty()
-            x = local.ExtractMax();
-            if ~map.ContainsKey(mat2str(x{2})) && ~map.ContainsKey(mat2str(x{3}))
-                seed.InsertKey(x);
-                map.Add(mat2str(x{2}), x{3});
-                map.Add(mat2str(x{3}), x{2});
-            end
-        end
+        seed = sort(seed, 1, 'descend');
     end
-
 end
 
-% Returns the maximum crosscorrelation between two matrices and the lag
-% between their centers.
-function [xcorrelation, lagX, lagY] = xcorrelation(n, I1, p, I2, q)
-    neighborhood1 = I1(p(1)-n:p(1)+n, p(2)-n:p(2)+n);
-    neighborhood2 = I2(q(1)-n:q(1)+n, q(2)-n:q(2)+n);
-        
-%     lagX = 0;
-%     lagY = 0;
-%     xcorrelation = sum(sum(normxcorr2(neighborhood1, neighborhood2)))/((2*n+1)^2);
-    [znccPartial, line] = max(normxcorr2(neighborhood1, neighborhood2));
-    [xcorrelation, column] = max(znccPartial);
-    
-    lagX = line(column)-2*n;
-    lagY = column-2*n;
-end
-
-% ?
-function s = confidence(I, x, y)
-    s = max([I(x+1, y)-I(x, y) I(x-1, y)-I(x, y) I(x, y+1)-I(x, y) I(x, y-1)-I(x, y)]);
+map1 = [map1(1:endMapInd-1, :); p1];
+map2 = [map2(1:endMapInd-1, :); p2];
 end
