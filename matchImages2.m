@@ -6,12 +6,16 @@ function [x, matchedPoints1, matchedPoints2] = matchImages2( I1, I2)
 %   Output: a set of points and a metric array(dependent on chosen method).
 %       - 'x': matrix m-by-n-by-2, where each x(i, j, :) represents the
 %       coordinates of the j-th matched point from the i-th projection.
+
     features = {@(x) detectSURFFeatures(x);...
         @(x) detectHarrisFeatures(x);...
-        @(x) detectMSERFeatures(x)};
+        @(x) detectMSERFeatures(x);...
+        @(x) detectMinEigenFeatures(x); ...
+        @(x) detectBRISKFeatures(x);
+        @(x) detectFASTFeatures(x)};
     x = [];
     
-    for i = 1:3
+    for i = 1:size(features, 1)
         % Find the features.
         points1 = features{i}(I1);
         points2 = features{i}(I2);
