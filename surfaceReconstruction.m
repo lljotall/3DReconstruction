@@ -1,6 +1,9 @@
 % Read the stereo images.
-I1 = imread('159_r0.png');
-I2 = imread('159_r10.png');
+% I1 = imread('159_r0.png');
+% I2 = imread('159_r10.png');
+
+I1 = rgb2gray(imread('../AppleJpg/A17.jpg'));
+I2 = rgb2gray(imread('../AppleJpg/A18.jpg'));
 
 % Match images
 x = matchImages2( I1, I2);

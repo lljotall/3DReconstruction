@@ -1,16 +1,24 @@
-function [map1, map2] = matchPropagation( I1, I2, p1, p2 )
+function [map1, map2, seed1, seed2] = matchPropagation( I1, I2, p1, p2 )
 %UNTITLED2 Summary of this function goes here
 %   Detailed explanation goes here
 %   Lhillier & Quan, 2002
 
 N= 2;
-NN = 2*N + 1;          % Neighborhood size
+NN = 2*N + 1;   % Neighborhood size
 n = 1;          % Local neighborhood size
 nn = 2*n + 1;
-z = 0.6;        % Xcorrelation threshold
-t = 0.005;          % Confidence threshold
-znccWindow = 5; %
+z = 0;        % Xcorrelation threshold
+t = 0;      % Confidence threshold
+znccWindow = 2; %
 NINF = -1024;
+
+
+[maxRow, maxCol] = size(I1);
+maxpoints = length(I1);
+seed = NINF*ones(maxpoints, 5);
+map1 = NINF*ones(maxpoints, 2);
+map2 = NINF*ones(maxpoints, 2);
+local = zeros(maxpoints, 5);
 
 % compute ZNCC and filter points
 [zncc, p1, p2] = computeMatchesZNCC(I1, p1, I2, p2, znccWindow);
@@ -18,16 +26,10 @@ p1 = p1(zncc > z, :);
 p2 = p2(zncc > z, :);
 zncc = zncc(zncc > z);
 
-[maxRow, maxCol] = size(I1);
-maxpoints = length(I1)^2;
-seed = NINF*ones(maxpoints, 5);
-map1 = NINF*ones(maxpoints, 2);
-map2 = NINF*ones(maxpoints, 2);
-local = zeros(maxpoints, 5);
-
 % Assembles Heap with Seed input points
 seed(1:length(zncc), :) = sort([zncc' p1 p2], 1, 'descend');
 nSeedsMatches = length(zncc);
+endMapInd = 1;    
 
 % computes neighborhood indexes
 globalNeighbors = zeros(NN*NN, 2);
@@ -44,7 +46,6 @@ confidence2 = confidence(I2);
 
 onesLocal = ones(length(localNeighbors), 2);
 bestSeedInd = 1;
-endMapInd = 1;    
 while nSeedsMatches > 0
     % best zncc
     bestSeedZNCC = seed(bestSeedInd, :);
@@ -61,16 +62,25 @@ while nSeedsMatches > 0
     u1(u1 < 1) = 1;
     u1(u1(:, 1) > maxRow, 1) = maxRow;
     u1(u1(:, 2) > maxCol, 2) = maxCol;
-    
+ 
+    u2Limits(1) = max(bestSeedZNCC(4) - N, 0);
+    u2Limits(2) = min(bestSeedZNCC(4) + N, maxRow);
+    u2Limits(3) = max(bestSeedZNCC(5) - N, 0);
+    u2Limits(4) = min(bestSeedZNCC(5) + N, maxCol);
     for i=1:length(u1)
-        u2 = bsxfun(@plus, localNeighbors, u1(i, :));
-        u2(u2(:, 1) < u1(1, 1), 1) = u1(1, 1);
-        u2(u2(:, 2) < u1(1, 2), 2) = u1(1, 2);
-        u2(u2(:, 1) > u1(end, 1), 1) = u1(end, 1);
-        u2(u2(:, 2) > u1(end, 2), 2) = u1(end, 2);
+        u2 = bsxfun(@plus, localNeighbors, bestSeedZNCC(4:5));
+        u2(u2(:, 1) < u2Limits(1), 1) = u2Limits(1);
+        u2(u2(:, 1) > u2Limits(2), 1) = u2Limits(2);
+        u2(u2(:, 2) < u2Limits(3), 1) = u2Limits(3);
+        u2(u2(:, 2) > u2Limits(4), 1) = u2Limits(4);
         
         uu1 = bsxfun(@times, u1(i, :), onesLocal);
         [znccLocal, fpu1, fpu2] = computeMatchesZNCC(I1, uu1, I2, u2, znccWindow);
+        
+        if isempty(fpu1) == true
+            continue;
+        end
+        
         fpu1 = fpu1(znccLocal > z, :);
         fpu2 = fpu2(znccLocal > z, :);
         
@@ -81,7 +91,7 @@ while nSeedsMatches > 0
         secondCondition =  uConf2 > t;
         andConditions = logical(firstCondition .* secondCondition); 
         
-        npropagated = sum (andConditions);
+        npropagated = sum(andConditions);
         if npropagated > 0
             local((nLocalMatches + 1):(nLocalMatches + npropagated), :) = ...
                 [zncc(andConditions)', fpu1(andConditions, :), fpu2(andConditions, :)];
@@ -116,6 +126,9 @@ while nSeedsMatches > 0
     end
 end
 
-map1 = [map1(1:endMapInd-1, :); p1];
-map2 = [map2(1:endMapInd-1, :); p2];
+map1 = map1(1:endMapInd-1, :);
+map2 = map2(1:endMapInd-1, :);
+seed1 = p1;
+seed2 = p2;
+
 end
